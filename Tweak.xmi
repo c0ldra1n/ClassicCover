@@ -1,0 +1,240 @@
+
+#import "Tweak.h"
+
+#import <xctheos.h>
+#import <substrate.h>
+
+#define CRCCBundlePath @"/Library/Application\ Support/ClassicCover/ClassicCover.bundle"
+
+#import "./ClassicCover/CRCCPrefsManager.h"
+
+NSBundle *CCBundle;
+BOOL presented;
+
+static BOOL forceDisable;
+
+static CRCCViewController *classicCoverViewController;
+
+
+#ifdef THEOSBUILD
+@interface NSObject ()
+
+@property (nonatomic, retain) CRCCViewController *classicCoverViewController;
+
+@end
+#endif
+
+GROUP(ClassicCover)
+
+HOOK(MusicApplication)
+
+-(UIInterfaceOrientationMask)supportedInterfaceOrientationsForWindow:(UIWindow *)window{
+    if([[UIDevice currentDevice] userInterfaceIdiom] != UIUserInterfaceIdiomPad){
+        return UIInterfaceOrientationMaskAllButUpsideDown;
+    }else{
+#ifdef THEOSBUILD
+        return ORIG();
+#else
+        return UIInterfaceOrientationMaskAll;
+#endif
+        
+    }
+}
+
+END()
+
+HOOK(MusicTabBarController)
+
+-(void)viewDidLoad{
+    ORIG();
+    
+    if(!CCBundle.loaded){
+        [CCBundle load];
+    }
+    
+    
+    classicCoverViewController = [[UIStoryboard storyboardWithName:@"ClassicCover" bundle:CCBundle] instantiateInitialViewController];
+    
+    classicCoverViewController.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+    classicCoverViewController.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    
+}
+
+-(void)loadView{
+    ORIG();
+}
+
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator{
+    
+    ORIG();
+    
+    if(forceDisable) return;
+    
+    NSLog(@"[ClassicCover]: viewWillTransitionToSize");
+    
+    [coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext>  _Nonnull context){
+        
+        
+        if(UIDeviceOrientationIsLandscape([UIDevice currentDevice].orientation)){
+            
+            if(!presented){
+                
+                [self view].alpha = 0;
+                
+                UIStatusBar *statusBar = MSHookIvar<UIStatusBar *>([UIApplication sharedApplication], "_statusBar");
+                
+                statusBar.foregroundColor = [UIColor whiteColor];
+                
+                [self presentViewController:classicCoverViewController animated:YES completion:^{
+                    presented = true;
+                    
+                }];
+                
+            }
+            
+        }else{
+            
+            if(presented){
+                
+                [self view].alpha = 1;
+                
+                UIStatusBar *statusBar = MSHookIvar<UIStatusBar *>([UIApplication sharedApplication], "_statusBar");
+                
+                statusBar.foregroundColor = nil;
+                
+                [classicCoverViewController dismissViewControllerAnimated:YES completion:^{
+                    presented = false;
+                    
+                }];
+                
+            }
+            
+        }
+        
+    } completion:^(id<UIViewControllerTransitionCoordinatorContext> _Nonnull context){
+        
+    }];
+    
+    
+}
+
+
+-(UIInterfaceOrientationMask)supportedInterfaceOrientations{
+    return UIInterfaceOrientationMaskAllButUpsideDown;
+}
+
+-(BOOL)shouldAutorotate{
+    return true;
+}
+
+-(BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation{
+    return true;
+}
+
+-(BOOL)prefersStatusBarHidden{
+    return false;
+}
+
+-(UIStatusBarStyle)preferredStatusBarStyle{
+    if(presented){
+        return UIStatusBarStyleLightContent;
+    }else{
+#ifdef THEOSBUILD
+        return ORIG();
+#else
+        return UIStatusBarStyleDefault;
+#endif
+    }
+}
+
+
+END()
+
+END_GROUP()
+
+
+GROUP(iOS10_Extras)
+
+HOOK(Music_NowPlayingViewController)
+
+-(void)viewDidAppear:(BOOL)animated{
+    ORIG();
+    forceDisable = true;
+}
+
+-(void)viewDidDisappear:(BOOL)animated{
+    ORIG();
+    forceDisable = false;
+}
+
+
+-(UIInterfaceOrientationMask)supportedInterfaceOrientations{
+    
+    if([[UIDevice currentDevice] userInterfaceIdiom] != UIUserInterfaceIdiomPad){
+        return UIInterfaceOrientationPortrait;
+    }else{
+        
+#ifdef THEOSBUILD
+        return ORIG();
+#else
+        return UIInterfaceOrientationMaskAll;
+#endif
+        
+    }
+}
+
+-(BOOL)shouldAutorotate{
+    if([[UIDevice currentDevice] userInterfaceIdiom] != UIUserInterfaceIdiomPad){
+        return false;
+    }else{
+        
+#ifdef THEOSBUILD
+        return ORIG();
+#else
+        return true;
+#endif
+        
+    }
+}
+
+-(BOOL)shouldAutorotateToInterfaceOrientation:(UIInterfaceOrientation)interfaceOrientation{
+    
+    if([[UIDevice currentDevice] userInterfaceIdiom] != UIUserInterfaceIdiomPad){
+        return false;
+    }else{
+        
+#ifdef THEOSBUILD
+        return ORIG();
+#else
+        return true;
+#endif
+        
+    }
+}
+
+END()
+
+END_GROUP()
+
+CTOR(){
+    
+    if([CRCCPrefsValueForKey(kCRCCPrefsEnabledKey) boolValue]){
+        
+        Class MusicTabBarController_Class;
+        
+        if(kCFCoreFoundationVersionNumber >= 1348.00){
+            //  iOS 10
+            MusicTabBarController_Class = NSClassFromString(@"Music.RootViewController");
+            INIT(iOS10_Extras, Music_NowPlayingViewController = NSClassFromString(@"Music.NowPlayingViewController"));
+        }else{
+            //  iOS 9 and Below
+            MusicTabBarController_Class = GET_CLASS(MusicTabBarController);
+        }
+        
+        INIT(ClassicCover, MusicTabBarController=MusicTabBarController_Class);
+        
+        CCBundle = [NSBundle bundleWithPath:CRCCBundlePath];
+        [CCBundle load];
+    }
+}
+

@@ -1,0 +1,10 @@
+Package: io.c0ldra1n.classiccover
+Name: ClassicCover
+Depends: firmware (>= 8), mobilesubstrate, preferenceloader, ws.hbang.common
+Version: 0.0.8
+Architecture: iphoneos-arm
+Description: Bring back the good old CoverFlow
+Maintainer: c0ldra1n
+Author: c0ldra1n
+Icon: https://repo.c0ldra1n.gq/public/icons/io.c0ldra1n.classiccover.png
+Section: Tweaks
